@@ -5,6 +5,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
-iced = { version = "0.14.0", default-features = false, features = ["canvas", "tokio", "tiny-skia", "fira-sans"]}
+iced = { version = "0.14.0", default-features = false, features = ["canvas", "tokio", "tiny-skia", "fira-sans", "wayland"]}
 chrono = "0.4"
 tracing-subscriber = "0.3"
