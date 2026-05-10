@@ -5,6 +5,31 @@ edition = "2024"
 publish = false
 
 [dependencies]
+# UI library and application framework
 iced = { version = "0.14.0", default-features = false, features = ["canvas", "tokio", "tiny-skia", "fira-sans", "wayland"]}
+
+# Timezone and daylight saving aware time
 chrono = "0.4"
+
+# Logging
 tracing-subscriber = "0.3"
+
+# Access to the SPI bus (SPI0, which is used to send data to the WS2812 LEDs) and the I²C bus.
+linux-embedded-hal = "0.4.1"
+
+# Driver for the VEML7700 ambient light sensor
+veml7700 = "0.3.2"
+
+# Driver for the GR10-30 gesture sensor
+# TODO: No crate available, write our  own.
+
+# Driver for the SCD41 CO2 sensor
+scd4x = "0.5.0"
+
+# Driver for the PMSA003I air quality sensor
+pmsa003i = "0.1.11"
+
+# Driver for WS2812 LED strip
+blinksy = "0.11.0"
+smart-leds = "0.4.0"
+ws2812-spi = { version = "0.5.1", features = ["std"] }
