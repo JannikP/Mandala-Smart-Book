@@ -1,57 +1,96 @@
-use iced::alignment;
+mod display;
+
+use anyhow::anyhow;
+use bytes::Bytes;
 use iced::mouse;
 use iced::time::{self, milliseconds};
-use iced::widget::canvas::{Cache, Geometry, LineCap, Path, Stroke, stroke};
-use iced::widget::{canvas, container, text};
-use iced::{
-    Degrees, Element, Fill, Font, Point, Radians, Rectangle, Renderer, Size, Subscription, Theme,
-    Vector,
-};
+use iced::widget::canvas;
+use iced::widget::canvas::{Cache, Geometry};
+use iced::widget::image::Handle;
+use iced::widget::mouse_area;
+use iced::window::Settings as WindowSettings;
+use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
+
+use crate::display::*;
+
+const CENTERPIECE: Bytes = Bytes::from_static(include_bytes!(
+    "../assets/images/centerpiece_placeholder.jpg"
+));
+const STENCIL: Bytes = Bytes::from_static(include_bytes!("../assets/images/stencil.png"));
+
+#[derive(Debug)]
+pub enum Message {
+    Tick(chrono::DateTime<chrono::Local>),
+    SCD41Measurement(anyhow::Result<scd4x::types::SensorData>),
+    VEML7700Measurement(anyhow::Result<f32>),
+    PMSA003IMeasurement(anyhow::Result<pmsa003i::Reading>),
+}
 
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
 
     iced::application(Clock::new, Clock::update, Clock::view)
+        .window(WindowSettings {
+            fullscreen: true,
+            size: Size::new(1080.0, 1920.0),
+            ..Default::default()
+        })
         .subscription(Clock::subscription)
         .theme(Clock::theme)
         .run()
 }
 
+#[derive(Debug)]
 struct Clock {
     now: chrono::DateTime<chrono::Local>,
-    clock: Cache,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Message {
-    Tick(chrono::DateTime<chrono::Local>),
+    scd4x_measurement: anyhow::Result<scd4x::types::SensorData>,
+    veml7700_measurement: anyhow::Result<f32>,
+    pmsa003i_measurement: anyhow::Result<pmsa003i::Reading>,
+    cache: Cache,
+    centerpiece: Handle,
+    stencil: Handle,
 }
 
 impl Clock {
     fn new() -> Self {
         Self {
             now: chrono::offset::Local::now(),
-            clock: Cache::default(),
+            scd4x_measurement: anyhow::Result::Err(anyhow!("Not measured")),
+            veml7700_measurement: anyhow::Result::Err(anyhow!("Not measured")),
+            pmsa003i_measurement: anyhow::Result::Err(anyhow!("Not measured")),
+            cache: Cache::default(),
+            centerpiece: Handle::from_bytes(CENTERPIECE),
+            stencil: Handle::from_bytes(STENCIL),
         }
     }
 
     fn update(&mut self, message: Message) {
         match message {
-            Message::Tick(local_time) => {
-                let now = local_time;
-
+            Message::Tick(now) => {
                 if now != self.now {
                     self.now = now;
-                    self.clock.clear();
+                    self.cache.clear();
                 }
+            }
+            Message::SCD41Measurement(measurement) => {
+                self.scd4x_measurement = measurement;
+                self.cache.clear();
+            }
+            Message::VEML7700Measurement(measurement) => {
+                self.veml7700_measurement = measurement;
+                self.cache.clear();
+            }
+            Message::PMSA003IMeasurement(measurement) => {
+                self.pmsa003i_measurement = measurement;
+                self.cache.clear();
             }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let canvas = canvas(self as &Self).width(Fill).height(Fill);
-
-        container(canvas).padding(20).into()
+        mouse_area(canvas(self as &Self).width(Fill).height(Fill))
+            .interaction(mouse::Interaction::Hidden)
+            .into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -59,7 +98,7 @@ impl Clock {
     }
 
     fn theme(&self) -> Theme {
-        Theme::ALL[(self.now.timestamp() as usize / 10) % Theme::ALL.len()].clone()
+        Theme::Dark
     }
 }
 
@@ -74,119 +113,20 @@ impl<Message> canvas::Program<Message> for Clock {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        use chrono::Timelike;
-
-        let clock = self.clock.draw(renderer, bounds.size(), |frame| {
+        let clock = self.cache.draw(renderer, bounds.size(), |frame| {
             let palette = theme.palette();
-            let center = frame.center();
-            let radius = frame.width().min(frame.height()) / 2.0;
+            let mut center = frame.center();
+            center.x = 0.0;
+            let radius = center.y;
 
-            let background = Path::circle(center, radius);
-            frame.fill(&background, palette.background);
-
-            let short_hand = Path::line(Point::ORIGIN, Point::new(0.0, -0.5 * radius));
-
-            let long_hand = Path::line(Point::ORIGIN, Point::new(0.0, -0.8 * radius));
-
-            let width = radius / 100.0;
-
-            let thin_stroke = || -> Stroke {
-                Stroke {
-                    width,
-                    style: stroke::Style::Solid(palette.primary),
-                    line_cap: LineCap::Round,
-                    ..Stroke::default()
-                }
-            };
-
-            let wide_stroke = || -> Stroke {
-                Stroke {
-                    width: width * 3.0,
-                    style: stroke::Style::Solid(palette.primary),
-                    line_cap: LineCap::Round,
-                    ..Stroke::default()
-                }
-            };
-
-            frame.translate(Vector::new(center.x, center.y));
-            let minutes_portion = Radians::from(hand_rotation(self.now.minute(), 60)) / 12.0;
-            let hour_hand_angle =
-                Radians::from(hand_rotation(self.now.hour(), 12)) + minutes_portion;
-
-            frame.with_save(|frame| {
-                frame.rotate(hour_hand_angle);
-                frame.stroke(&short_hand, wide_stroke());
-            });
-
-            frame.with_save(|frame| {
-                frame.rotate(hand_rotation(self.now.minute(), 60));
-                frame.stroke(&long_hand, wide_stroke());
-            });
-
-            frame.with_save(|frame| {
-                let rotation = hand_rotation(self.now.second(), 60);
-
-                frame.rotate(rotation);
-                frame.stroke(&long_hand, thin_stroke());
-
-                let rotate_factor = if rotation < 180.0 { 1.0 } else { -1.0 };
-
-                frame.rotate(Degrees(-90.0 * rotate_factor));
-                frame.fill_text(canvas::Text {
-                    content: theme.to_string(),
-                    size: (radius / 15.0).into(),
-                    position: Point::new((0.78 * radius) * rotate_factor, -width * 2.0),
-                    color: palette.primary,
-                    align_x: if rotate_factor > 0.0 {
-                        text::Alignment::Right
-                    } else {
-                        text::Alignment::Left
-                    },
-                    align_y: alignment::Vertical::Bottom,
-                    font: Font::MONOSPACE,
-                    ..canvas::Text::default()
-                });
-            });
-
-            // Draw clock numbers
-            for hour in 1..=12 {
-                let angle = Radians::from(hand_rotation(hour, 12)) - Radians::from(Degrees(90.0));
-                let x = radius * angle.0.cos();
-                let y = radius * angle.0.sin();
-
-                frame.fill_text(canvas::Text {
-                    content: format!("{hour}"),
-                    size: (radius / 5.0).into(),
-                    position: Point::new(x * 0.82, y * 0.82),
-                    color: palette.primary,
-                    align_x: text::Alignment::Center,
-                    align_y: alignment::Vertical::Center,
-                    font: Font::MONOSPACE,
-                    ..canvas::Text::default()
-                });
-            }
-
-            // Draw ticks
-            for tick in 0..60 {
-                let angle = hand_rotation(tick, 60);
-                let width = if tick % 5 == 0 { 3.0 } else { 1.0 };
-
-                frame.with_save(|frame| {
-                    frame.rotate(angle);
-                    frame.fill(
-                        &Path::rectangle(Point::new(0.0, radius - 15.0), Size::new(width, 7.0)),
-                        palette.primary,
-                    );
-                });
-            }
+            draw_centerpiece_photo(frame, bounds, palette, &self.centerpiece, &self.stencil);
+            draw_time_and_date(frame, self.now);
+            draw_co2(frame, &self.scd4x_measurement);
+            draw_temperature(frame, &self.scd4x_measurement);
+            draw_humidity(frame, &self.scd4x_measurement);
+            draw_air_quality(frame, &self.pmsa003i_measurement);
+            draw_weather_forecast(frame);
         });
-
         vec![clock]
     }
-}
-
-fn hand_rotation(n: u32, total: u32) -> Degrees {
-    let turns = n as f32 / total as f32;
-
-    Degrees(360.0 * turns)
 }

@@ -1,16 +1,19 @@
 use std::{thread, time};
 
-use smart_leds::{SmartLedsWrite, RGB8};
-use linux_embedded_hal::{SPIError, SpidevBus, spidev::{SpiModeFlags, SpidevOptions}};
+use linux_embedded_hal::{
+    SPIError, SpidevBus,
+    spidev::{SpiModeFlags, SpidevOptions},
+};
+use smart_leds::{RGB8, SmartLedsWrite};
 use ws2812_spi::hosted::Ws2812;
 
 fn create_spi() -> Result<SpidevBus, SPIError> {
     let mut spi = SpidevBus::open("/dev/spidev0.0")?;
     let options = SpidevOptions::new()
-         .bits_per_word(8)
-         .max_speed_hz(3_800_000)
-         .mode(SpiModeFlags::SPI_MODE_0)
-         .build();
+        .bits_per_word(8)
+        .max_speed_hz(3_800_000)
+        .mode(SpiModeFlags::SPI_MODE_0)
+        .build();
     spi.configure(&options)?;
     Ok(spi)
 }
