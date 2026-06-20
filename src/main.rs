@@ -1,6 +1,5 @@
 mod display;
 
-use anyhow::anyhow;
 use bytes::Bytes;
 use iced::mouse;
 use iced::time::{self, milliseconds};
@@ -18,12 +17,20 @@ const CENTERPIECE: Bytes = Bytes::from_static(include_bytes!(
 ));
 const STENCIL: Bytes = Bytes::from_static(include_bytes!("../assets/images/stencil.png"));
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Message {
     Tick(chrono::DateTime<chrono::Local>),
-    SCD41Measurement(anyhow::Result<scd4x::types::SensorData>),
-    VEML7700Measurement(anyhow::Result<f32>),
-    PMSA003IMeasurement(anyhow::Result<pmsa003i::Reading>),
+    SCD41Measurement(Result<scd4x::types::SensorData, Missing>),
+    VEML7700Measurement(Result<f32, Missing>),
+    PMSA003IMeasurement(Result<pmsa003i::Reading, Missing>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Missing {
+    NotMeasured,
+    HardwareFault(String),
+    Timeout,
+    Other(String),
 }
 
 pub fn main() -> iced::Result {
@@ -43,9 +50,9 @@ pub fn main() -> iced::Result {
 #[derive(Debug)]
 struct Clock {
     now: chrono::DateTime<chrono::Local>,
-    scd4x_measurement: anyhow::Result<scd4x::types::SensorData>,
-    veml7700_measurement: anyhow::Result<f32>,
-    pmsa003i_measurement: anyhow::Result<pmsa003i::Reading>,
+    scd4x_measurement: Result<scd4x::types::SensorData, Missing>,
+    veml7700_measurement: Result<f32, Missing>,
+    pmsa003i_measurement: Result<pmsa003i::Reading, Missing>,
     cache: Cache,
     centerpiece: Handle,
     stencil: Handle,
@@ -55,9 +62,9 @@ impl Clock {
     fn new() -> Self {
         Self {
             now: chrono::offset::Local::now(),
-            scd4x_measurement: anyhow::Result::Err(anyhow!("Not measured")),
-            veml7700_measurement: anyhow::Result::Err(anyhow!("Not measured")),
-            pmsa003i_measurement: anyhow::Result::Err(anyhow!("Not measured")),
+            scd4x_measurement: Result::Err(Missing::NotMeasured),
+            veml7700_measurement: Result::Err(Missing::NotMeasured),
+            pmsa003i_measurement: Result::Err(Missing::NotMeasured),
             cache: Cache::default(),
             centerpiece: Handle::from_bytes(CENTERPIECE),
             stencil: Handle::from_bytes(STENCIL),
@@ -115,12 +122,8 @@ impl<Message> canvas::Program<Message> for Clock {
     ) -> Vec<Geometry> {
         let clock = self.cache.draw(renderer, bounds.size(), |frame| {
             let palette = theme.palette();
-            let mut center = frame.center();
-            center.x = 0.0;
-            let radius = center.y;
-
             draw_centerpiece_photo(frame, bounds, palette, &self.centerpiece, &self.stencil);
-            draw_time_and_date(frame, self.now);
+            draw_time_and_date(frame, self.now, palette);
             draw_co2(frame, &self.scd4x_measurement);
             draw_temperature(frame, &self.scd4x_measurement);
             draw_humidity(frame, &self.scd4x_measurement);
