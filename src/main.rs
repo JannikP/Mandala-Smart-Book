@@ -1,16 +1,19 @@
 mod display;
+mod sensors;
 
 use bytes::Bytes;
-use iced::mouse;
+use iced::theme::Palette;
 use iced::time::{self, milliseconds};
 use iced::widget::canvas;
 use iced::widget::canvas::{Cache, Geometry};
 use iced::widget::image::Handle;
 use iced::widget::mouse_area;
 use iced::window::Settings as WindowSettings;
+use iced::{Color, color, mouse};
 use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
 
 use crate::display::*;
+use crate::sensors::stream_sensors;
 
 const CENTERPIECE: Bytes = Bytes::from_static(include_bytes!(
     "../assets/images/centerpiece_placeholder.jpg"
@@ -101,11 +104,24 @@ impl Clock {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now()))
+        Subscription::batch([
+            time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
+            Subscription::run(stream_sensors),
+        ])
     }
 
     fn theme(&self) -> Theme {
-        Theme::Dark
+        Theme::custom(
+            "Black and White",
+            Palette {
+                background: Color::BLACK,
+                text: color!(0xbcbcbc),
+                primary: Color::WHITE,
+                success: color!(0x23c00e),
+                danger: color!(0xc03e0e),
+                warning: color!(0xc08d0e),
+            },
+        )
     }
 }
 
@@ -124,10 +140,10 @@ impl<Message> canvas::Program<Message> for Clock {
             let palette = theme.palette();
             draw_centerpiece_photo(frame, bounds, palette, &self.centerpiece, &self.stencil);
             draw_time_and_date(frame, self.now, palette);
-            draw_co2(frame, &self.scd4x_measurement);
-            draw_temperature(frame, &self.scd4x_measurement);
-            draw_humidity(frame, &self.scd4x_measurement);
-            draw_air_quality(frame, &self.pmsa003i_measurement);
+            draw_co2(frame, &self.scd4x_measurement, palette);
+            draw_temperature(frame, &self.scd4x_measurement, palette);
+            draw_humidity(frame, &self.scd4x_measurement, palette);
+            draw_air_quality(frame, &self.pmsa003i_measurement, palette);
             draw_weather_forecast(frame);
         });
         vec![clock]
