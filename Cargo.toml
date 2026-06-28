@@ -23,6 +23,7 @@ tracing-subscriber = "0.3"
 # Access to the SPI bus (SPI0, which is used to send data to the WS2812 LEDs) and the I²C bus.
 linux-embedded-hal = "0.4.1"
 embedded-hal = "1.0.0"
+embedded-hal-bus = { version = "0.3.0", features = ["std"] }
 
 # Driver for the VEML7700 ambient light sensor
 veml7700 = "0.3.2"
@@ -34,11 +35,12 @@ veml7700 = "0.3.2"
 scd4x = { version = "0.5.0", features = ["scd41"] }
 
 # Driver for the PMSA003I air quality sensor
-pmsa003i = { version = "0.1.11", features = ["async", "aqi"] }
+pmsa003i = { version = "0.1.11", features = ["aqi"] }
 
 # Driver for WS2812 LED strip
 smart-leds = "0.4.0"
 ws2812-spi = { version = "0.5.1", features = ["std"] }
 
 # Async runtime
-tokio = "1.52.3"
+tokio = { version = "1.52.3", features = ["macros"] }
+futures = "0.3.32"
