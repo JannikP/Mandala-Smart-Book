@@ -79,15 +79,12 @@ where
             continue;
         }
 
-        let data = sensor.measurement().expect("Could not get sensor reading.");
-
-        println!(
-            "CO2: {0}, Temperature: {1:#.2} \u{00b0}C, Humidity: {2:#.2} RH",
-            data.co2, data.temperature, data.humidity
-        );
+        let result = sensor
+            .measurement()
+            .map_err(|e| Missing::HardwareFault(format!("Failed to read: {:?}", e)));
 
         output
-            .send(Message::SCD41Measurement(Ok(data)))
+            .send(Message::SCD41Measurement(result))
             .await
             .expect("Failed to send message.");
     }

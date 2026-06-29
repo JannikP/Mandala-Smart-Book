@@ -8,6 +8,9 @@ publish = false
 # Error handling
 anyhow = "1.0.102"
 
+# Setting screen brightness
+brightness = "0.8.0"
+
 # Keeping encoded image data in memory
 bytes = "1.12.0"
 

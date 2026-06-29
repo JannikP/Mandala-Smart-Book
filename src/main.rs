@@ -1,4 +1,5 @@
 mod display;
+mod screen;
 mod sensors;
 
 use bytes::Bytes;
@@ -9,10 +10,11 @@ use iced::widget::canvas::{Cache, Geometry};
 use iced::widget::image::Handle;
 use iced::widget::mouse_area;
 use iced::window::Settings as WindowSettings;
-use iced::{Color, color, mouse};
+use iced::{Color, Task, color, mouse};
 use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
 
 use crate::display::*;
+use crate::screen::{ambient_to_screen_brightness, change_screen_brightness};
 use crate::sensors::stream_sensors;
 
 const CENTERPIECE: Bytes = Bytes::from_static(include_bytes!(
@@ -22,6 +24,7 @@ const STENCIL: Bytes = Bytes::from_static(include_bytes!("../assets/images/stenc
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    None,
     Tick(chrono::DateTime<chrono::Local>),
     SCD41Measurement(Result<scd4x::types::SensorData, Missing>),
     VEML7700Measurement(Result<f32, Missing>),
@@ -59,6 +62,7 @@ struct Clock {
     cache: Cache,
     centerpiece: Handle,
     stencil: Handle,
+    brightness: u32,
 }
 
 impl Clock {
@@ -71,28 +75,43 @@ impl Clock {
             cache: Cache::default(),
             centerpiece: Handle::from_bytes(CENTERPIECE),
             stencil: Handle::from_bytes(STENCIL),
+            brightness: 0,
         }
     }
 
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::None => Task::none(),
             Message::Tick(now) => {
                 if now != self.now {
                     self.now = now;
                     self.cache.clear();
                 }
+                Task::none()
             }
             Message::SCD41Measurement(measurement) => {
                 self.scd4x_measurement = measurement;
                 self.cache.clear();
+                Task::none()
             }
             Message::VEML7700Measurement(measurement) => {
-                self.veml7700_measurement = measurement;
-                self.cache.clear();
+                self.veml7700_measurement = measurement.clone();
+                if let Ok(value) = measurement {
+                    let target_brightness = ambient_to_screen_brightness(value);
+                    if target_brightness != self.brightness {
+                        self.brightness = target_brightness;
+                        change_screen_brightness(target_brightness)
+                    } else {
+                        Task::none()
+                    }
+                } else {
+                    Task::none()
+                }
             }
             Message::PMSA003IMeasurement(measurement) => {
                 self.pmsa003i_measurement = measurement;
                 self.cache.clear();
+                Task::none()
             }
         }
     }
