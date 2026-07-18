@@ -1,4 +1,5 @@
 mod display;
+mod gr10_30;
 mod screen;
 mod sensors;
 
@@ -12,8 +13,10 @@ use iced::widget::mouse_area;
 use iced::window::Settings as WindowSettings;
 use iced::{Color, Task, color, mouse};
 use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
+use std::env;
 
 use crate::display::*;
+use crate::gr10_30::Gesture;
 use crate::screen::{ambient_to_screen_brightness, change_screen_brightness};
 use crate::sensors::stream_sensors;
 
@@ -29,6 +32,7 @@ pub enum Message {
     SCD41Measurement(Result<scd4x::types::SensorData, Missing>),
     VEML7700Measurement(Result<f32, Missing>),
     PMSA003IMeasurement(Result<pmsa003i::Reading, Missing>),
+    Gesture(Gesture),
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +45,12 @@ pub enum Missing {
 
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
+
+    // Required to be launched from SSH and still use the one and only display.
+    // If removed iced fails to launch with error message that this env war is not set.
+    unsafe {
+        env::set_var("WAYLAND_DISPLAY", "wayland-0");
+    }
 
     iced::application(Clock::new, Clock::update, Clock::view)
         .window(WindowSettings {
@@ -113,6 +123,7 @@ impl Clock {
                 self.cache.clear();
                 Task::none()
             }
+            Message::Gesture(_gesture) => Task::none(),
         }
     }
 

@@ -10,20 +10,56 @@ use std::{sync::Mutex, time::Duration};
 use tokio::time;
 use veml7700::Veml7700;
 
+use crate::gr10_30::{GR1030, Gesture};
 use crate::{Message, Missing};
 
 const ENVIRONMENTAL_SENSOR_INTERVAL: u64 = 5; // seconds
 const VEML7700_INTERVAL: u64 = 1000; // milliseconds
+const GR1030_INTERVAL: u64 = 500; // milliseconds
 
 pub fn stream_sensors() -> impl Stream<Item = Message> {
     stream::channel(100, async |output| {
         let dev = Mutex::new(I2cdev::new("/dev/i2c-1").expect("Could not open I2C device."));
         tokio::join! {
+            stream_gr10_30(output.clone(), embedded_hal_bus::i2c::MutexDevice::new(&dev)),
             stream_pmsa003i(output.clone(), embedded_hal_bus::i2c::MutexDevice::new(&dev)),
             stream_scd41(output.clone(), embedded_hal_bus::i2c::MutexDevice::new(&dev)),
             stream_veml7700(output.clone(), embedded_hal_bus::i2c::MutexDevice::new(&dev)),
         };
     })
+}
+
+async fn stream_gr10_30<I2C, E>(mut output: mpsc::Sender<Message>, dev: I2C)
+where
+    I2C: I2c<Error = E>,
+    E: std::fmt::Debug,
+{
+    let mut sensor = GR1030::new(dev);
+    sensor
+        .set_up(Gesture::Left | Gesture::Right)
+        .await
+        .expect("Failed to set up GR10-30");
+
+    let mut interval = time::interval(Duration::from_millis(GR1030_INTERVAL));
+    loop {
+        match sensor.check_and_get_gesture() {
+            Ok(Some(gestures)) => {
+                println!("Detected gesture: {:?}", gestures);
+                output
+                    .send(Message::Gesture(gestures))
+                    .await
+                    .expect("Failed to send message.");
+            }
+            Ok(None) => {
+                println!("No data ready.");
+            }
+            Err(error) => {
+                println!("Failed to read gesture from GR10-30: {:?}", error);
+            }
+        }
+
+        interval.tick().await;
+    }
 }
 
 async fn stream_pmsa003i<I2C, E>(mut output: mpsc::Sender<Message>, dev: I2C)
@@ -59,15 +95,13 @@ where
         .expect("Could not stop periodic measurements.");
     sensor.reinit().expect("Failed to reinitialize sensor.");
 
-    let serial = sensor
+    let _serial = sensor
         .serial_number()
         .expect("Could not get serial number.");
-    println!("serial: {serial:#04x}");
 
     sensor
         .start_periodic_measurement()
         .expect("Could not start periodic measurements.");
-    println!("Waiting for first measurement... (5 sec)");
     let mut interval = time::interval(Duration::from_secs(ENVIRONMENTAL_SENSOR_INTERVAL));
     loop {
         interval.tick().await;

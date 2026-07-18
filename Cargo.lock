@@ -7,6 +7,7 @@ name = "Mandala-Smart-Book"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitmask-enum",
  "brightness",
  "bytes",
  "chrono",
@@ -379,6 +380,16 @@ name = "bitflags"
 version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
+
+[[package]]
+name = "bitmask-enum"
+version = "2.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6cbbb8f56245b5a479b30a62cdc86d26e2f35c2b9f594bc4671654b03851380"
+dependencies = [
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "bitstream-io"
