@@ -1,5 +1,6 @@
 mod display;
 mod gr10_30;
+mod light;
 mod screen;
 mod sensors;
 
@@ -17,6 +18,7 @@ use std::env;
 
 use crate::display::*;
 use crate::gr10_30::Gesture;
+use crate::light::{LightShow, stream_light_show};
 use crate::screen::{ambient_to_screen_brightness, change_screen_brightness};
 use crate::sensors::stream_sensors;
 
@@ -73,6 +75,7 @@ struct Clock {
     centerpiece: Handle,
     stencil: Handle,
     brightness: u32,
+    light_show: LightShow,
 }
 
 impl Clock {
@@ -86,6 +89,7 @@ impl Clock {
             centerpiece: Handle::from_bytes(CENTERPIECE),
             stencil: Handle::from_bytes(STENCIL),
             brightness: 0,
+            light_show: LightShow::default(),
         }
     }
 
@@ -137,6 +141,8 @@ impl Clock {
         Subscription::batch([
             time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
             Subscription::run(stream_sensors),
+            Subscription::run_with(self.light_show, |d| stream_light_show(d.clone()))
+                .map(ignore_error),
         ])
     }
 
@@ -177,5 +183,12 @@ impl<Message> canvas::Program<Message> for Clock {
             draw_weather_forecast(frame);
         });
         vec![clock]
+    }
+}
+
+fn ignore_error<E>(item: Result<Message, E>) -> Message {
+    match item {
+        Ok(message) => message,
+        Err(_) => Message::None,
     }
 }

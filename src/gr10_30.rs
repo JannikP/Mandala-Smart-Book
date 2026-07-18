@@ -105,6 +105,7 @@ pub enum Error<E> {
     /// Invalid VID.
     InvalidVID,
 }
+
 impl<E> From<E> for Error<E> {
     fn from(other: E) -> Self {
         Error::I2C(other)
