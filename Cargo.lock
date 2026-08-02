@@ -15,6 +15,7 @@ dependencies = [
  "embedded-hal-bus",
  "futures",
  "iced",
+ "image",
  "linux-embedded-hal",
  "pmsa003i",
  "scd4x",

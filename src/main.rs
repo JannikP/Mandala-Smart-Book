@@ -141,7 +141,7 @@ impl Clock {
         Subscription::batch([
             time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
             Subscription::run(stream_sensors),
-            Subscription::run_with(self.light_show, |d| stream_light_show(d.clone()))
+            Subscription::run_with(self.light_show.clone(), |d| stream_light_show(d.clone()))
                 .map(ignore_error),
         ])
     }

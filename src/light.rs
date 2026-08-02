@@ -1,5 +1,7 @@
-use iced::futures::Stream;
-use iced::stream;
+use anyhow::{Context, Result, anyhow};
+use iced::{Color, futures::Stream};
+use iced::{color, stream};
+use image::{ImageBuffer, Rgb};
 use linux_embedded_hal::{
     SPIError, SpidevBus,
     spidev::{SpiModeFlags, SpidevOptions},
@@ -14,43 +16,74 @@ use crate::Message;
 const NUM_LEDS: usize = 24;
 const ANIMATION_INTERVAL: u64 = 40; // milliseconds = 25 frames per second
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LightShow {
-    /// All lights off, no show.
-    #[default]
-    Off,
-
-    /// All LEDs same plain white color.
-    PlainWhite,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LightShow {
+    data: ImageBuffer<Rgb<u8>, Vec<u8>>,
 }
 
 impl LightShow {
-    pub fn is_some(self) -> bool {
-        self != LightShow::Off
+    pub fn off() -> Self {
+        Self::constant(color!(0x000000))
+    }
+    
+    pub fn white() -> Self {
+        Self::constant(color!(0xffffff))
     }
 
-    pub fn steps(self) -> usize {
-        1
+    pub fn bits() -> Result<Self> {
+        let buffer = include_bytes!("../assets/animations/bits.png");
+        Self::from_image_bytes(buffer.as_slice())
     }
 
-    pub fn sample(self, step: usize, data: &mut [RGB8; NUM_LEDS]) {
-        assert!(step < self.steps());
-        match self {
-            LightShow::Off => {
-                for led in data.iter_mut() {
-                    led.r = 0;
-                    led.g = 0;
-                    led.b = 0;
-                }
-            }
-            LightShow::PlainWhite => {
-                for led in data.iter_mut() {
-                    led.r = 255;
-                    led.g = 255;
-                    led.b = 255;
-                }
-            }
+    pub fn rainbow() -> Result<Self> {
+        let buffer = include_bytes!("../assets/animations/rainbow.png");
+        Self::from_image_bytes(buffer.as_slice())
+    }
+
+    pub fn sparks() -> Result<Self> {
+        let buffer = include_bytes!("../assets/animations/sparks.png");
+        Self::from_image_bytes(buffer.as_slice())
+    }
+
+    pub fn constant(color: Color) -> Self {
+        let mut image: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(1, NUM_LEDS as u32);
+        for pixel in image.pixels_mut() {
+            pixel[0] = (color.r * 255.0) as u8;
+            pixel[1] = (color.g * 255.0) as u8;
+            pixel[2] = (color.b * 255.0) as u8;
         }
+        Self { data: image }
+    }
+
+    pub fn from_image_bytes(buffer: &[u8]) -> Result<Self> {
+        let image = image::load_from_memory(buffer)
+            .context("Failed to decode image from memory.")?
+            .into_rgb8();
+
+        if image.height() as usize != NUM_LEDS {
+            return Err(anyhow!("Invalid animation image size. Must have a height of {NUM_LEDS} pixel."));
+        }
+
+        Ok(Self { data: image })
+    }
+
+    pub fn sample(&self, step: u32, buffer: &mut [RGB8; NUM_LEDS]) {
+        for row in 0..NUM_LEDS {
+            let pixel = self.data.get_pixel(step, row as u32);
+            buffer[row].r = pixel[0];
+            buffer[row].g = pixel[1];
+            buffer[row].b = pixel[2];
+        }
+    }
+
+    pub fn steps(&self) -> u32 {
+        self.data.width()
+    }
+}
+
+impl Default for LightShow {
+    fn default() -> Self {
+        Self::off()
     }
 }
 
