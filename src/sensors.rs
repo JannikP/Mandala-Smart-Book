@@ -35,30 +35,38 @@ where
     E: std::fmt::Debug,
 {
     let mut sensor = GR1030::new(dev);
-    sensor
-        .set_up(Gesture::Left | Gesture::Right)
-        .await
-        .expect("Failed to set up GR10-30");
-
-    let mut interval = time::interval(Duration::from_millis(GR1030_INTERVAL));
     loop {
-        match sensor.check_and_get_gesture() {
-            Ok(Some(gestures)) => {
-                println!("Detected gesture: {:?}", gestures);
-                output
-                    .send(Message::Gesture(gestures))
-                    .await
-                    .expect("Failed to send message.");
-            }
-            Ok(None) => {
-                println!("No data ready.");
-            }
-            Err(error) => {
-                println!("Failed to read gesture from GR10-30: {:?}", error);
-            }
+        let outcome = sensor
+            .set_up(Gesture::Left | Gesture::Right | Gesture::Up | Gesture::Down)
+            .await
+            .err();
+        if let Some(error) = outcome {
+            println!("Failed to initialize GR10-30, because of {error:?}.");
+            time::sleep(Duration::from_secs(2)).await;
+            continue;
         }
 
-        interval.tick().await;
+        let mut interval = time::interval(Duration::from_millis(GR1030_INTERVAL));
+        loop {
+            match sensor.check_and_get_gesture() {
+                Ok(Some(gestures)) => {
+                    output
+                        .send(Message::Gesture(gestures))
+                        .await
+                        .expect("Failed to send message.");
+                }
+                Ok(None) => {
+                    // println!("No data ready.");
+                }
+                Err(error) => {
+                    println!("Failed to read gesture from GR10-30: {:?}", error);
+                    // TODO: report error properly
+                    break;
+                }
+            }
+
+            interval.tick().await;
+        }
     }
 }
 

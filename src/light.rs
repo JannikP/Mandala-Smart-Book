@@ -15,6 +15,65 @@ use crate::Message;
 
 const NUM_LEDS: usize = 24;
 const ANIMATION_INTERVAL: u64 = 40; // milliseconds = 25 frames per second
+const SHOWS: usize = 4;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ShowMaster {
+    shows: [LightShow; SHOWS],
+    off: LightShow,
+    current: usize,
+    playing: bool,
+}
+
+impl ShowMaster {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            shows: [
+                LightShow::white(),
+                LightShow::rainbow()?,
+                LightShow::bits()?,
+                LightShow::sparks()?,
+            ],
+            off: LightShow::off(),
+            current: 0,
+            playing: false,
+        })
+    }
+
+    pub fn show<'a>(&'a self) -> &'a LightShow {
+        if self.playing {
+            &self.shows[self.current]
+        } else {
+            &self.off
+        }
+    }
+
+    pub fn on(&mut self) {
+        self.playing = true
+    }
+
+    pub fn off(&mut self) {
+        self.playing = false
+    }
+
+    pub fn next(&mut self) {
+        self.current = (SHOWS - 1).min(self.current + 1)
+    }
+
+    pub fn previous(&mut self) {
+        if self.current > 0 {
+            self.current -= 1
+        } else {
+            self.playing = false
+        }
+    }
+}
+
+impl Default for ShowMaster {
+    fn default() -> Self {
+        ShowMaster::new().expect("Failed to create one or more light shows.")
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LightShow {

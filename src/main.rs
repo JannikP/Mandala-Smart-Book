@@ -18,7 +18,7 @@ use std::env;
 
 use crate::display::*;
 use crate::gr10_30::Gesture;
-use crate::light::{LightShow, stream_light_show};
+use crate::light::{ShowMaster, stream_light_show};
 use crate::screen::{ambient_to_screen_brightness, change_screen_brightness};
 use crate::sensors::stream_sensors;
 
@@ -75,7 +75,7 @@ struct Clock {
     centerpiece: Handle,
     stencil: Handle,
     brightness: u32,
-    light_show: LightShow,
+    light_show: ShowMaster,
 }
 
 impl Clock {
@@ -89,7 +89,7 @@ impl Clock {
             centerpiece: Handle::from_bytes(CENTERPIECE),
             stencil: Handle::from_bytes(STENCIL),
             brightness: 0,
-            light_show: LightShow::default(),
+            light_show: ShowMaster::default(),
         }
     }
 
@@ -127,7 +127,19 @@ impl Clock {
                 self.cache.clear();
                 Task::none()
             }
-            Message::Gesture(_gesture) => Task::none(),
+            Message::Gesture(gesture) => {
+                println!("Processing gesture {gesture:?}.");
+                if gesture.contains(Gesture::Left) {
+                    self.light_show.previous();
+                } else if gesture.contains(Gesture::Right) {
+                    self.light_show.next();
+                } else if gesture.contains(Gesture::Up) {
+                    self.light_show.on();
+                } else if gesture.contains(Gesture::Down) {
+                    self.light_show.off();
+                }
+                Task::none()
+            },
         }
     }
 
@@ -141,7 +153,7 @@ impl Clock {
         Subscription::batch([
             time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
             Subscription::run(stream_sensors),
-            Subscription::run_with(self.light_show.clone(), |d| stream_light_show(d.clone()))
+            Subscription::run_with(self.light_show.show().clone(), |d| stream_light_show(d.clone()))
                 .map(ignore_error),
         ])
     }
