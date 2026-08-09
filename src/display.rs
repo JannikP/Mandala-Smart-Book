@@ -6,23 +6,10 @@ use iced::{Font, Point, Rectangle, Renderer};
 
 use crate::Missing;
 
-pub fn draw_centerpiece_photo(
+pub fn draw_stencil(
     frame: &mut Frame<Renderer>,
-    bounds: Rectangle,
-    palette: Palette,
-    centerpiece: &Handle,
     stencil: &Handle,
 ) {
-    frame.fill_rectangle(bounds.position(), bounds.size(), palette.background);
-    frame.draw_image(
-        Rectangle {
-            x: 0.0,
-            y: 367.0,
-            width: 667.0,
-            height: 1186.0,
-        },
-        centerpiece,
-    );
     frame.draw_image(
         Rectangle {
             x: 0.0,

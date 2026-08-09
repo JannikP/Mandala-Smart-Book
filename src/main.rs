@@ -1,4 +1,5 @@
 mod display;
+mod gallery;
 mod gr10_30;
 mod light;
 mod screen;
@@ -6,25 +7,25 @@ mod sensors;
 
 use bytes::Bytes;
 use iced::theme::Palette;
-use iced::time::{self, milliseconds};
-use iced::widget::canvas;
+use iced::time::{self, milliseconds, seconds};
+use iced::widget::{canvas, image};
 use iced::widget::canvas::{Cache, Geometry};
+use iced::widget::container;
 use iced::widget::image::Handle;
 use iced::widget::mouse_area;
+use iced::widget::Stack;
 use iced::window::Settings as WindowSettings;
-use iced::{Color, Task, color, mouse};
+use iced::{Color, Length, Task, color, mouse};
 use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
 use std::env;
 
 use crate::display::*;
+use crate::gallery::Gallery;
 use crate::gr10_30::Gesture;
 use crate::light::{ShowMaster, stream_light_show};
 use crate::screen::{ambient_to_screen_brightness, change_screen_brightness};
 use crate::sensors::stream_sensors;
 
-const CENTERPIECE: Bytes = Bytes::from_static(include_bytes!(
-    "../assets/images/centerpiece_placeholder.jpg"
-));
 const STENCIL: Bytes = Bytes::from_static(include_bytes!("../assets/images/stencil.png"));
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,7 @@ pub enum Message {
     VEML7700Measurement(Result<f32, Missing>),
     PMSA003IMeasurement(Result<pmsa003i::Reading, Missing>),
     Gesture(Gesture),
+    TurnGallery,
 }
 
 #[derive(Debug, Clone)]
@@ -72,10 +74,10 @@ struct Clock {
     veml7700_measurement: Result<f32, Missing>,
     pmsa003i_measurement: Result<pmsa003i::Reading, Missing>,
     cache: Cache,
-    centerpiece: Handle,
     stencil: Handle,
     brightness: u32,
     light_show: ShowMaster,
+    gallery: Gallery,
 }
 
 impl Clock {
@@ -86,10 +88,10 @@ impl Clock {
             veml7700_measurement: Result::Err(Missing::NotMeasured),
             pmsa003i_measurement: Result::Err(Missing::NotMeasured),
             cache: Cache::default(),
-            centerpiece: Handle::from_bytes(CENTERPIECE),
             stencil: Handle::from_bytes(STENCIL),
             brightness: 0,
             light_show: ShowMaster::default(),
+            gallery: Gallery::new().expect("Failed to initialize gallery."),
         }
     }
 
@@ -140,11 +142,31 @@ impl Clock {
                 }
                 Task::none()
             },
+            Message::TurnGallery => {
+                self.gallery.next();
+                Task::none()
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        mouse_area(canvas(self as &Self).width(Fill).height(Fill))
+        let stack = Stack::new()
+            .push(
+                canvas(self as &Self)
+                .width(Fill)
+                .height(Fill)
+            )
+            .push_under(
+                container(
+                image(self.gallery.image())
+                    .width(667.0)
+                    .height(1186.0)
+                    .content_fit(iced::ContentFit::Cover)
+                )
+                .align_left(Length::Fill)
+                .center_y(Length::Fill)
+            );
+        mouse_area(stack)
             .interaction(mouse::Interaction::Hidden)
             .into()
     }
@@ -152,6 +174,7 @@ impl Clock {
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
+            time::every(seconds(60)).map(|_| Message::TurnGallery),
             Subscription::run(stream_sensors),
             Subscription::run_with(self.light_show.show().clone(), |d| stream_light_show(d.clone()))
                 .map(ignore_error),
@@ -186,7 +209,7 @@ impl<Message> canvas::Program<Message> for Clock {
     ) -> Vec<Geometry> {
         let clock = self.cache.draw(renderer, bounds.size(), |frame| {
             let palette = theme.palette();
-            draw_centerpiece_photo(frame, bounds, palette, &self.centerpiece, &self.stencil);
+            draw_stencil(frame, &self.stencil);
             draw_time_and_date(frame, self.now, palette);
             draw_co2(frame, &self.scd4x_measurement, palette);
             draw_temperature(frame, &self.scd4x_measurement, palette);
