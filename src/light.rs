@@ -15,7 +15,7 @@ use crate::Message;
 
 const NUM_LEDS: usize = 24;
 const ANIMATION_INTERVAL: u64 = 40; // milliseconds = 25 frames per second
-const SHOWS: usize = 4;
+const SHOWS: usize = 5;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ShowMaster {
@@ -33,6 +33,7 @@ impl ShowMaster {
                 LightShow::rainbow()?,
                 LightShow::bits()?,
                 LightShow::sparks()?,
+                LightShow::fire()?,
             ],
             off: LightShow::off(),
             current: 0,
@@ -57,14 +58,16 @@ impl ShowMaster {
     }
 
     pub fn next(&mut self) {
-        self.current = (SHOWS - 1).min(self.current + 1)
+        if self.playing {
+            self.current = (SHOWS - 1).min(self.current + 1)
+        }
     }
 
     pub fn previous(&mut self) {
-        if self.current > 0 {
-            self.current -= 1
-        } else {
-            self.playing = false
+        if self.playing {
+            if self.current > 0 {
+                self.current -= 1
+            }
         }
     }
 }
@@ -84,7 +87,7 @@ impl LightShow {
     pub fn off() -> Self {
         Self::constant(color!(0x000000))
     }
-    
+
     pub fn white() -> Self {
         Self::constant(color!(0xffffff))
     }
@@ -104,6 +107,11 @@ impl LightShow {
         Self::from_image_bytes(buffer.as_slice())
     }
 
+    pub fn fire() -> Result<Self> {
+        let buffer = include_bytes!("../assets/animations/fire.png");
+        Self::from_image_bytes(buffer.as_slice())
+    }
+
     pub fn constant(color: Color) -> Self {
         let mut image: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(1, NUM_LEDS as u32);
         for pixel in image.pixels_mut() {
@@ -114,13 +122,28 @@ impl LightShow {
         Self { data: image }
     }
 
+    /// Read a [LightShow] from image data. The image must be exactly [NUM_LEDS] pixel in height and
+    /// any number > 0 pixels wide. The animation advances by 1 pixel to the right per [ANIMATION_INTERVAL]
+    /// milliseconds (40 ms per frame or 25 frames/pixels per second).
+    ///
+    /// One column of pixels is mapped to the LEDs directly.
+    /// ```text
+    ///  0: Top pixel --> Bottom rear LED
+    ///   ...
+    /// 11: --> Top rear LED
+    /// 12: --> Top front LED
+    ///   ...
+    /// 24: --> Bottom front LED
+    /// ```
     pub fn from_image_bytes(buffer: &[u8]) -> Result<Self> {
         let image = image::load_from_memory(buffer)
             .context("Failed to decode image from memory.")?
             .into_rgb8();
 
         if image.height() as usize != NUM_LEDS {
-            return Err(anyhow!("Invalid animation image size. Must have a height of {NUM_LEDS} pixel."));
+            return Err(anyhow!(
+                "Invalid animation image size. Must have a height of {NUM_LEDS} pixel."
+            ));
         }
 
         Ok(Self { data: image })

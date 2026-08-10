@@ -20,15 +20,11 @@ impl Gallery {
             .map(|p| p.path())
             //.filter(is_image_file)
             .collect();
-        println!("Found {} images.", images.len());
         if images.is_empty() {
-            return Err(anyhow!("No images found in {}!", gallery_folder.display()))
+            return Err(anyhow!("No images found in {}!", gallery_folder.display()));
         }
         images.shuffle(&mut rng());
-        Ok(Self {
-            images,
-            current: 0,
-        })
+        Ok(Self { images, current: 0 })
     }
 
     pub fn image(&self) -> impl Into<Handle> {

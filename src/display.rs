@@ -6,10 +6,7 @@ use iced::{Font, Point, Rectangle, Renderer};
 
 use crate::Missing;
 
-pub fn draw_stencil(
-    frame: &mut Frame<Renderer>,
-    stencil: &Handle,
-) {
+pub fn draw_stencil(frame: &mut Frame<Renderer>, stencil: &Handle) {
     frame.draw_image(
         Rectangle {
             x: 0.0,

@@ -15,7 +15,6 @@ pub fn change_screen_brightness(percentage: u32) -> Task<Message> {
 }
 
 async fn apply_brightness(percentage: u32) -> Message {
-    println!("Setting brightness to {percentage} %.");
     brightness::brightness_devices()
         .try_for_each(|mut dev| async move {
             dev.set(percentage).await?;

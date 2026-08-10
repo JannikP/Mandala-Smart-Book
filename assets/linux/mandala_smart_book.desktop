@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Mandala-Smart-Book
+Exec=/home/jannik/bin/mandala_smart_book
+X-GNOME-Autostart-enabled=true

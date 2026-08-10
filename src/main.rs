@@ -8,12 +8,12 @@ mod sensors;
 use bytes::Bytes;
 use iced::theme::Palette;
 use iced::time::{self, milliseconds, seconds};
-use iced::widget::{canvas, image};
+use iced::widget::Stack;
 use iced::widget::canvas::{Cache, Geometry};
 use iced::widget::container;
 use iced::widget::image::Handle;
 use iced::widget::mouse_area;
-use iced::widget::Stack;
+use iced::widget::{canvas, image};
 use iced::window::Settings as WindowSettings;
 use iced::{Color, Length, Task, color, mouse};
 use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
@@ -130,7 +130,6 @@ impl Clock {
                 Task::none()
             }
             Message::Gesture(gesture) => {
-                println!("Processing gesture {gesture:?}.");
                 if gesture.contains(Gesture::Left) {
                     self.light_show.previous();
                 } else if gesture.contains(Gesture::Right) {
@@ -141,7 +140,7 @@ impl Clock {
                     self.light_show.off();
                 }
                 Task::none()
-            },
+            }
             Message::TurnGallery => {
                 self.gallery.next();
                 Task::none()
@@ -151,20 +150,16 @@ impl Clock {
 
     fn view(&self) -> Element<'_, Message> {
         let stack = Stack::new()
-            .push(
-                canvas(self as &Self)
-                .width(Fill)
-                .height(Fill)
-            )
+            .push(canvas(self as &Self).width(Fill).height(Fill))
             .push_under(
                 container(
-                image(self.gallery.image())
-                    .width(667.0)
-                    .height(1186.0)
-                    .content_fit(iced::ContentFit::Cover)
+                    image(self.gallery.image())
+                        .width(667.0)
+                        .height(1186.0)
+                        .content_fit(iced::ContentFit::Cover),
                 )
                 .align_left(Length::Fill)
-                .center_y(Length::Fill)
+                .center_y(Length::Fill),
             );
         mouse_area(stack)
             .interaction(mouse::Interaction::Hidden)
@@ -176,8 +171,10 @@ impl Clock {
             time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
             time::every(seconds(60)).map(|_| Message::TurnGallery),
             Subscription::run(stream_sensors),
-            Subscription::run_with(self.light_show.show().clone(), |d| stream_light_show(d.clone()))
-                .map(ignore_error),
+            Subscription::run_with(self.light_show.show().clone(), |d| {
+                stream_light_show(d.clone())
+            })
+            .map(ignore_error),
         ])
     }
 
