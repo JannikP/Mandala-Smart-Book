@@ -1,8 +1,11 @@
 {
     "cSpell.words": [
+        "calloop",
+        "chrono",
         "pmsa",
         "Spidev",
         "UART",
-        "VEML7700"
+        "VEML7700",
+        "zwlr"
     ]
 }

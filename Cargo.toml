@@ -8,9 +8,6 @@ publish = false
 # Error handling
 anyhow = "1.0.102"
 
-# Setting screen brightness
-brightness = "0.8.0"
-
 # Keeping encoded image data in memory
 bytes = "1.12.0"
 
@@ -38,7 +35,8 @@ rand = "0.10.2"
 veml7700 = "0.3.2"
 
 # Driver for the GR10-30 gesture sensor
-# TODO: No crate available, write our  own.
+# No official crate. Custom implementation in `gr10-30.rs`.
+bitmask-enum = "2.2.5"
 
 # Driver for the SCD41 CO2 sensor
 scd4x = { version = "0.5.0", features = ["scd41"] }
@@ -53,4 +51,10 @@ ws2812-spi = { version = "0.5.1", features = ["std"] }
 # Async runtime
 tokio = { version = "1.52.3", features = ["macros"] }
 futures = "0.3.32"
-bitmask-enum = "2.2.5"
+
+# Setting the screen brightness by manipulating the gamma curve via wayland
+wayland-client = "0.31"
+wayland-protocols-wlr = "0.3"
+tempfile = "3"
+calloop = "0.14.4"
+calloop-wayland-source = "0.4.1"
