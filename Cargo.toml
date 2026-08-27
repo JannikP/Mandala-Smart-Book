@@ -53,8 +53,8 @@ tokio = { version = "1.52.3", features = ["macros"] }
 futures = "0.3.32"
 
 # Setting the screen brightness by manipulating the gamma curve via wayland
-wayland-client = "0.31"
-wayland-protocols-wlr = "0.3"
-tempfile = "3"
-calloop = "0.14.4"
-calloop-wayland-source = "0.4.1"
+bytemuck = "1.25.2"
+memmap2 = "0.9.11"
+shmemfdrs2 = "1.0"
+wayrs-client = "1.3.1"
+wayrs-protocols = { version = "0.14.11", features = ["wlr-gamma-control-unstable-v1"] }

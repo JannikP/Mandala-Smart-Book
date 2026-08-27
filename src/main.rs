@@ -1,10 +1,11 @@
+mod color;
 mod display;
 mod gallery;
-mod gamma_worker;
 mod gr10_30;
 mod light;
 mod screen;
 mod sensors;
+mod wayland;
 
 use bytes::Bytes;
 use iced::theme::Palette;
@@ -22,7 +23,6 @@ use std::env;
 
 use crate::display::*;
 use crate::gallery::Gallery;
-use crate::gamma_worker::Event;
 use crate::gr10_30::Gesture;
 use crate::light::{ShowMaster, stream_light_show};
 use crate::screen::ambient_to_screen_brightness;
@@ -39,8 +39,6 @@ pub enum Message {
     PMSA003IMeasurement(Result<pmsa003i::Reading, Missing>),
     Gesture(Gesture),
     TurnGallery,
-    Gamma(Event),
-    Brightness(f32),
 }
 
 #[derive(Debug, Clone)]
@@ -79,10 +77,9 @@ struct Clock {
     pmsa003i_measurement: Result<pmsa003i::Reading, Missing>,
     cache: Cache,
     stencil: Handle,
-    brightness: u32,
+    brightness: f32,
     light_show: ShowMaster,
     gallery: Gallery,
-    gamma_tx: Option<calloop_channel::Sender<gamma_worker::Input>>,
 }
 
 impl Clock {
@@ -94,10 +91,9 @@ impl Clock {
             pmsa003i_measurement: Result::Err(Missing::NotMeasured),
             cache: Cache::default(),
             stencil: Handle::from_bytes(STENCIL),
-            brightness: 0,
+            brightness: 0.0,
             light_show: ShowMaster::default(),
             gallery: Gallery::new().expect("Failed to initialize gallery."),
-            gamma_tx: None,
         }
     }
 
@@ -120,12 +116,11 @@ impl Clock {
                 self.veml7700_measurement = measurement.clone();
                 if let Ok(value) = measurement {
                     let target_brightness = ambient_to_screen_brightness(value);
-                    if target_brightness != self.brightness {
+                    if (target_brightness - self.brightness).abs() > f32::EPSILON {
                         self.brightness = target_brightness;
-                        change_screen_brightness(target_brightness)
-                    } else {
-                        Task::none()
+                        
                     }
+                    Task::none()
                 } else {
                     Task::none()
                 }
@@ -151,24 +146,6 @@ impl Clock {
                 self.gallery.next();
                 Task::none()
             }
-            Message::Gamma(gamma_worker::Event::Ready(tx)) => {
-                self.gamma_tx = Some(tx);
-                Task::none()
-            }
-            Message::Gamma(gamma_worker::Event::Failed) => {
-                log::error!("Gamma control unavailable");
-                Task::none()
-            }
-            Message::Gamma(gamma_worker::Event::Error(e)) => {
-                log::error!("Gamma control error: {}", e);
-                Task::none()
-            }
-            Message::Brightness(brightness) => {
-                if let Some(tx) = &self.gamma_tx {
-                    let _ = tx.try_send(gamma_worker::Input::SetBrightness(brightness));
-                }
-                Task::none()
-            }
         }
     }
 
@@ -192,8 +169,6 @@ impl Clock {
 
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
-            // Connect to the gamma control manager and report back with a channel to send brightness changes to.
-            Subscription::run(gamma_worker::connect).map(Message::Gamma),
             // Update the current time.
             time::every(milliseconds(500)).map(|_| Message::Tick(chrono::offset::Local::now())),
             // Turn to the next gallery image every 60 seconds.
