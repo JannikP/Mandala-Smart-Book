@@ -2,10 +2,12 @@
     "cSpell.words": [
         "calloop",
         "chrono",
+        "dbus",
+        "gammarelay",
         "pmsa",
         "Spidev",
         "UART",
         "VEML7700",
-        "zwlr"
+        "zbus",
     ]
 }

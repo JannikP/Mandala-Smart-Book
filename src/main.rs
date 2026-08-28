@@ -1,11 +1,9 @@
-mod color;
 mod display;
 mod gallery;
 mod gr10_30;
 mod light;
 mod screen;
 mod sensors;
-mod wayland;
 
 use bytes::Bytes;
 use iced::theme::Palette;
@@ -20,12 +18,13 @@ use iced::window::Settings as WindowSettings;
 use iced::{Color, Length, Task, color, mouse};
 use iced::{Element, Fill, Rectangle, Renderer, Size, Subscription, Theme};
 use std::env;
+use std::process::Command;
 
 use crate::display::*;
 use crate::gallery::Gallery;
 use crate::gr10_30::Gesture;
 use crate::light::{ShowMaster, stream_light_show};
-use crate::screen::ambient_to_screen_brightness;
+use crate::screen::{ambient_to_screen_brightness, apply_screen_brightness};
 use crate::sensors::stream_sensors;
 
 const STENCIL: Bytes = Bytes::from_static(include_bytes!("../assets/images/stencil.png"));
@@ -57,6 +56,10 @@ pub fn main() -> iced::Result {
     unsafe {
         env::set_var("WAYLAND_DISPLAY", "wayland-0");
     }
+
+    let _ = Command::new("wl-gammarelay-rs")
+        .spawn()
+        .expect("Failed to start wl-gammarelay-rs for brightness control. Is it installed?");
 
     iced::application(Clock::new, Clock::update, Clock::view)
         .window(WindowSettings {
@@ -99,36 +102,30 @@ impl Clock {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::None => Task::none(),
+            Message::None => {}
             Message::Tick(now) => {
                 if now != self.now {
                     self.now = now;
                     self.cache.clear();
                 }
-                Task::none()
             }
             Message::SCD41Measurement(measurement) => {
                 self.scd4x_measurement = measurement;
                 self.cache.clear();
-                Task::none()
             }
             Message::VEML7700Measurement(measurement) => {
                 self.veml7700_measurement = measurement.clone();
                 if let Ok(value) = measurement {
                     let target_brightness = ambient_to_screen_brightness(value);
-                    if (target_brightness - self.brightness).abs() > f32::EPSILON {
-                        self.brightness = target_brightness;
-                        
-                    }
-                    Task::none()
-                } else {
-                    Task::none()
+                    self.brightness = target_brightness;
+                    return Task::perform(apply_screen_brightness(target_brightness), |_| {
+                        Message::None
+                    });
                 }
             }
             Message::PMSA003IMeasurement(measurement) => {
                 self.pmsa003i_measurement = measurement;
                 self.cache.clear();
-                Task::none()
             }
             Message::Gesture(gesture) => {
                 if gesture.contains(Gesture::Left) {
@@ -140,13 +137,12 @@ impl Clock {
                 } else if gesture.contains(Gesture::Down) {
                     self.light_show.off();
                 }
-                Task::none()
             }
             Message::TurnGallery => {
                 self.gallery.next();
-                Task::none()
             }
         }
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
