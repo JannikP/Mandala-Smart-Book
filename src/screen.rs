@@ -5,7 +5,7 @@ use zbus::{Connection, proxy};
 
 /// Convert ambient brightness in lux to screen brightness as fraction (0.0 to 1.0).
 pub fn ambient_to_screen_brightness(lux: f32) -> f32 {
-    (lux / 50.0).clamp(0.0, 1.0) // TODO: Maybe use full brightness at 2000 lux instead of 50.
+    (lux / 200.0).clamp(0.05, 1.0)
 }
 
 // # DBus interface proxy for: `rs.wl.gammarelay`

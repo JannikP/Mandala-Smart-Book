@@ -8,6 +8,7 @@ use pmsa003i::Pmsa003i;
 use scd4x::Scd4x;
 use std::{sync::Mutex, time::Duration};
 use tokio::time;
+use tracing::{info, error};
 use veml7700::Veml7700;
 
 use crate::gr10_30::{GR1030, Gesture};
@@ -41,25 +42,25 @@ where
             .await
             .err();
         if let Some(error) = outcome {
-            println!("Failed to initialize GR10-30, because of {error:?}.");
+            error!("Failed to initialize GR10-30, because of {error:?}.");
             time::sleep(Duration::from_secs(2)).await;
             continue;
         }
 
+        info!("GR10-30 ready.");
         let mut interval = time::interval(Duration::from_millis(GR1030_INTERVAL));
         loop {
             match sensor.check_and_get_gesture() {
                 Ok(Some(gestures)) => {
-                    output
+                    let _ = output
                         .send(Message::Gesture(gestures))
-                        .await
-                        .expect("Failed to send message.");
+                        .await;
                 }
                 Ok(None) => {
-                    // println!("No data ready.");
+                    // info!("No data ready.");
                 }
                 Err(error) => {
-                    println!("Failed to read gesture from GR10-30: {:?}", error);
+                    error!("Failed to read gesture from GR10-30: {:?}", error);
                     // TODO: report error properly
                     break;
                 }
@@ -97,38 +98,60 @@ where
 {
     let mut sensor = Scd4x::new(dev, Delay);
 
+    loop {
+        let outcome = stream_scd41_inner(&mut output, &mut sensor).await.err();
+        if let Some(error) = outcome {
+            error!("SCD41 failed, because of {error:?}. Re-initializing...");
+            time::sleep(Duration::from_secs(2)).await;
+        }
+    }
+}
+
+async fn stream_scd41_inner<I2C, E>(
+    output: &mut mpsc::Sender<Message>, 
+    sensor: &mut Scd4x<I2C, Delay>,
+) -> Result<(), scd4x::Error<E>> where
+    I2C: I2c<Error = E>,
+    E: std::fmt::Debug,
+{
     sensor.wake_up();
-    sensor
-        .stop_periodic_measurement()
-        .expect("Could not stop periodic measurements.");
-    sensor.reinit().expect("Failed to reinitialize sensor.");
+    sensor.stop_periodic_measurement()?;
+    sensor.reinit()?;
 
-    let _serial = sensor
-        .serial_number()
-        .expect("Could not get serial number.");
+    let _serial = sensor.serial_number()?;
 
-    sensor
-        .start_periodic_measurement()
-        .expect("Could not start periodic measurements.");
+    sensor.start_periodic_measurement()?;
     let mut interval = time::interval(Duration::from_secs(ENVIRONMENTAL_SENSOR_INTERVAL));
+    let mut error_counter = 0;
     loop {
         interval.tick().await;
 
-        let ready = sensor
-            .data_ready_status()
-            .expect("Could not get measurement ready status.");
+        let ready = sensor.data_ready_status()?;
         if !ready {
             continue;
         }
 
-        let result = sensor
-            .measurement()
-            .map_err(|e| Missing::HardwareFault(format!("Failed to read: {:?}", e)));
-
-        output
-            .send(Message::SCD41Measurement(result))
-            .await
-            .expect("Failed to send message.");
+        match sensor.measurement() {
+            Ok(result) => {
+                // Ignore the error as the best error reaction to a full queue is drop that message.
+                let error = output
+                    .send(Message::SCD41Measurement(Ok(result)))
+                    .await
+                    .err()
+                    .is_some();
+                if error {
+                    error_counter += 1;
+                } else {
+                    error_counter = 0;
+                }
+            },
+            Err(_) => {
+                error_counter += 1;
+                if error_counter > 10 {
+                    return Ok(()); // Ugly cheat to avoid to create a new error type.
+                }
+            }
+        }
     }
 }
 
